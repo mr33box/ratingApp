@@ -10,7 +10,7 @@ class RatingItem {
   final String? imagePath;
   final DateTime createdAt;
   final bool isFolder;
-  final String? parentId;
+  final List<String> folderIds;
 
   RatingItem({
     required this.id,
@@ -22,7 +22,7 @@ class RatingItem {
     this.imagePath,
     required this.createdAt,
     this.isFolder = false,
-    this.parentId,
+    this.folderIds = const [],
   });
 
   // Convert to JSON for storage
@@ -42,7 +42,7 @@ class RatingItem {
       'imagePath': imagePath,
       'createdAt': createdAt.toIso8601String(),
       'isFolder': isFolder,
-      'parentId': parentId,
+      'folderIds': folderIds,
     };
   }
 
@@ -58,6 +58,14 @@ class RatingItem {
         colorData['b'] as int,
       );
     }
+    
+    // Migration: Handle old parentId if folderIds is missing
+    List<String> loadedFolderIds = [];
+    if (json['folderIds'] != null) {
+        loadedFolderIds = List<String>.from(json['folderIds']);
+    } else if (json['parentId'] != null) {
+        loadedFolderIds.add(json['parentId'] as String);
+    }
 
     return RatingItem(
       id: json['id'] as String,
@@ -69,7 +77,7 @@ class RatingItem {
       imagePath: json['imagePath'] as String?,
       createdAt: DateTime.parse(json['createdAt'] as String),
       isFolder: json['isFolder'] as bool? ?? false,
-      parentId: json['parentId'] as String?,
+      folderIds: loadedFolderIds,
     );
   }
 }

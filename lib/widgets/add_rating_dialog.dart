@@ -12,7 +12,7 @@ class AddRatingDialog extends StatefulWidget {
   final Function(String) onDeleteCategory;
   final VoidCallback? onDelete;
   final RatingItem? editingItem;
-  final String? parentId;
+  final String? currentFolderId; // Changed from parentId to currentFolderId for clarity
 
   const AddRatingDialog({
     super.key,
@@ -22,7 +22,7 @@ class AddRatingDialog extends StatefulWidget {
     required this.onDeleteCategory,
     this.onDelete,
     this.editingItem,
-    this.parentId,
+    this.currentFolderId,
   });
 
   @override
@@ -127,18 +127,25 @@ class _AddRatingDialogState extends State<AddRatingDialog> {
         color: _selectedColor,
         imagePath: _selectedImagePath,
         createdAt: widget.editingItem?.createdAt ?? DateTime.now(),
-        // FIX: Persist the parentId (folder) - prioritize existing item's parent, then passed parentId
-        parentId: widget.editingItem?.parentId ?? widget.parentId,
+        // Persist the folderIds - prioritize existing item's folders, or use current folder
+        folderIds: widget.editingItem?.folderIds ?? 
+                   (widget.currentFolderId != null ? [widget.currentFolderId!] : []),
         isFolder: widget.editingItem?.isFolder ?? false,
       );
 
+      print('Creating rating item...');
+      print('folderIds: ${widget.editingItem?.folderIds ?? (widget.currentFolderId != null ? [widget.currentFolderId!] : [])}');
+      
       widget.onAddRating(rating);
+      
+      print('Rating added successfully');
       
       // Close the dialog
       if (mounted) {
         Navigator.of(context).pop();
       }
     } catch (e) {
+      print('Error saving rating: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -510,25 +517,38 @@ class _AddRatingDialogState extends State<AddRatingDialog> {
                     ],
                   ),
                   const SizedBox(height: 24),
-                  // Name field
+                  // Name field - with character limit
                   TextFormField(
                     controller: _nameController,
+                    maxLength: 50, // Limit to 50 chars
                     decoration: InputDecoration(
                       labelText: 'Name',
                       hintText: 'Book, Series, Film, Show, etc.',
-                      border: InputBorder.none,
-                      enabledBorder: InputBorder.none,
-                      focusedBorder: InputBorder.none,
-                      errorBorder: UnderlineInputBorder(
-                        borderSide: BorderSide(color: Colors.red, width: 2),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
                       ),
-                      focusedErrorBorder: UnderlineInputBorder(
-                        borderSide: BorderSide(color: Colors.red, width: 2),
+                      counterText: "", 
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                      errorBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: Colors.red, width: 2),
+                      ),
+                      focusedErrorBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: Colors.red, width: 2),
                       ),
                       prefixIcon: const Icon(Icons.title),
                       filled: true,
                       fillColor: colorScheme.surfaceContainerHighest,
-                      errorStyle: TextStyle(color: Colors.red, fontSize: 12),
+                      errorStyle: const TextStyle(color: Colors.red, fontSize: 12),
                     ),
                     validator: (value) {
                       if (value == null || value.trim().isEmpty) {
@@ -538,15 +558,25 @@ class _AddRatingDialogState extends State<AddRatingDialog> {
                     },
                   ),
                   const SizedBox(height: 16),
+                  
                   // Category section
                   if (!_isCreatingCategory)
                     DropdownButtonFormField<String>(
                       value: _selectedCategory,
                       decoration: InputDecoration(
                         labelText: 'Category (Optional)',
-                        border: InputBorder.none,
-                        enabledBorder: InputBorder.none,
-                        focusedBorder: InputBorder.none,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
                         prefixIcon: const Icon(Icons.category),
                         filled: true,
                         fillColor: colorScheme.surfaceContainerHighest,
@@ -561,7 +591,10 @@ class _AddRatingDialogState extends State<AddRatingDialog> {
                               value: category,
                               child: GestureDetector(
                                 onLongPress: () => _showDeleteCategoryDialog(category),
-                                child: Text(category),
+                                child: ConstrainedBox(
+                                    constraints: const BoxConstraints(maxWidth: 200),
+                                    child: Text(category, overflow: TextOverflow.ellipsis)
+                                ),
                               ),
                             )),
                         const DropdownMenuItem<String>(
@@ -583,11 +616,22 @@ class _AddRatingDialogState extends State<AddRatingDialog> {
                         Expanded(
                           child: TextFormField(
                             controller: _newCategoryController,
+                            maxLength: 30,
                             decoration: InputDecoration(
                               labelText: 'Category Name',
-                              border: InputBorder.none,
-                              enabledBorder: InputBorder.none,
-                              focusedBorder: InputBorder.none,
+                              counterText: "",
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide.none,
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide.none,
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide.none,
+                              ),
                               prefixIcon: const Icon(Icons.category),
                               filled: true,
                               fillColor: colorScheme.surfaceContainerHighest,
@@ -627,6 +671,7 @@ class _AddRatingDialogState extends State<AddRatingDialog> {
                       ],
                     ),
                   const SizedBox(height: 24),
+                  
                   // Rating section
                   Container(
                     padding: const EdgeInsets.all(16),
@@ -691,11 +736,12 @@ class _AddRatingDialogState extends State<AddRatingDialog> {
                             value: _rating,
                             min: 1.0,
                             max: 10.0,
-                            divisions: 90,
+                            divisions: 900,
                             label: _rating.toStringAsFixed(2),
                             onChanged: (value) {
                               setState(() {
-                                _rating = value;
+                                // Snap to 0.1 when dragging
+                                _rating = (value * 10).round() / 10;
                               });
                             },
                           ),
@@ -703,106 +749,117 @@ class _AddRatingDialogState extends State<AddRatingDialog> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text(
-                              '1.0',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: colorScheme.onSurface.withOpacity(0.6),
-                              ),
-                            ),
-                            Text(
-                              '10.0',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: colorScheme.onSurface.withOpacity(0.6),
-                              ),
-                            ),
+                            Text('1.0', style: TextStyle(fontSize: 12, color: colorScheme.onSurface.withOpacity(0.6))),
+                            Text('10.0', style: TextStyle(fontSize: 12, color: colorScheme.onSurface.withOpacity(0.6))),
                           ],
                         ),
                       ],
                     ),
                   ),
                   const SizedBox(height: 16),
-                  // Description field
-                  TextFormField(
-                    controller: _descriptionController,
-                    decoration: InputDecoration(
-                      labelText: 'Description (Optional)',
-                      hintText: 'Add any notes...',
-                      border: InputBorder.none,
-                      enabledBorder: InputBorder.none,
-                      focusedBorder: InputBorder.none,
-                      prefixIcon: const Icon(Icons.description),
-                      filled: true,
-                      fillColor: colorScheme.surfaceContainerHighest,
-                    ),
-                    maxLines: 2,
-                  ),
-                  const SizedBox(height: 16),
-                  // Image picker section
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: colorScheme.surfaceContainerHighest,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                  
+                  // More Options (Description & Image)
+                  Theme(
+                    data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                    child: ExpansionTile(
+                      title: const Text('More Options'),
+                      subtitle: const Text('Description, Image'),
+                      tilePadding: EdgeInsets.zero,
                       children: [
-                        const Text(
-                          'Background Image (Optional)',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        if (_selectedImagePath != null)
-                          Stack(
-                            children: [
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(12),
-                                child: Image.file(
-                                  File(_selectedImagePath!),
-                                  height: 150,
-                                  width: double.infinity,
-                                  fit: BoxFit.cover,
-                                ),
+                          // Description field
+                          TextFormField(
+                            controller: _descriptionController,
+                            decoration: InputDecoration(
+                              labelText: 'Description (Optional)',
+                              hintText: 'Add any notes...',
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(16),
+                                borderSide: BorderSide.none,
                               ),
-                              Positioned(
-                                top: 8,
-                                right: 8,
-                                child: IconButton(
-                                  onPressed: _removeImage,
-                                  icon: const Icon(Icons.close),
-                                  style: IconButton.styleFrom(
-                                    backgroundColor: Colors.black54,
-                                    foregroundColor: Colors.white,
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(16),
+                                borderSide: BorderSide.none,
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(16),
+                                borderSide: BorderSide.none,
+                              ),
+                              prefixIcon: const Icon(Icons.description),
+                              filled: true,
+                              fillColor: colorScheme.surfaceContainerHighest,
+                            ),
+                            maxLines: 3,
+                          ),
+                          const SizedBox(height: 16),
+                          
+                          // Image picker section
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: colorScheme.surfaceContainerHighest,
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Background Image (Optional)',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
                                   ),
                                 ),
-                              ),
-                            ],
-                          )
-                        else
-                          ElevatedButton.icon(
-                            onPressed: _pickImage,
-                            icon: const Icon(Icons.image),
-                            label: const Text('Choose Photo'),
-                            style: ElevatedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 20,
-                                vertical: 12,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
+                                const SizedBox(height: 12),
+                                if (_selectedImagePath != null)
+                                  Stack(
+                                    children: [
+                                      ClipRRect(
+                                        borderRadius: BorderRadius.circular(12),
+                                        child: Image.file(
+                                          File(_selectedImagePath!),
+                                          height: 150,
+                                          width: double.infinity,
+                                          fit: BoxFit.cover,
+                                        ),
+                                      ),
+                                      Positioned(
+                                        top: 8,
+                                        right: 8,
+                                        child: IconButton(
+                                          onPressed: _removeImage,
+                                          icon: const Icon(Icons.close),
+                                          style: IconButton.styleFrom(
+                                            backgroundColor: Colors.black54,
+                                            foregroundColor: Colors.white,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  )
+                                else
+                                  ElevatedButton.icon(
+                                    onPressed: _pickImage,
+                                    icon: const Icon(Icons.image),
+                                    label: const Text('Choose Photo'),
+                                    style: ElevatedButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 20,
+                                        vertical: 12,
+                                      ),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                  ),
+                              ],
                             ),
                           ),
                       ],
                     ),
                   ),
+
                   const SizedBox(height: 24),
-                  // Buttons
+                  // Buttons (Save/Cancel) - Previous implementation remains
                   Row(
                     children: [
                       Expanded(

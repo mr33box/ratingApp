@@ -8,6 +8,7 @@ class AppDrawer extends StatelessWidget {
   final String? currentFolderId;
   final Function(String?) onFolderSelected;
   final VoidCallback onCreateFolder;
+  final Function(String) onDeleteFolder;
   final Function(ThemeMode) onThemeModeChanged;
   final bool isWeakMode; // Assuming light mode logic here, renaming for clarity or use theme
   
@@ -17,6 +18,7 @@ class AppDrawer extends StatelessWidget {
     required this.currentFolderId,
     required this.onFolderSelected,
     required this.onCreateFolder,
+    required this.onDeleteFolder,
     required this.onThemeModeChanged,
     this.isWeakMode = false, // Added default value
   });
@@ -75,8 +77,8 @@ class AppDrawer extends StatelessWidget {
       builder: (context) => AlertDialog(
         title: const Text('About'),
         content: const Text(
-          'Rating App\n\n'
-          'Version: 1.0.0\n\n'
+          'My Rates\n\n'
+          'Version: 1.1.0\n\n'
           'A simple app to track and rate your favorite books, '
           'series, films, and shows.',
         ),
@@ -94,16 +96,31 @@ class AppDrawer extends StatelessWidget {
     try {
       final ratings = await StorageService.loadRatings();
       
-      final Map<String?, List<RatingItem>> grouped = {};
-      for (var item in ratings) {
-        if (!grouped.containsKey(item.parentId)) {
-          grouped[item.parentId] = [];
-        }
-        grouped[item.parentId]!.add(item);
-      }
-      
+      // Since items can be in multiple folders now, we'll just show a flat list
       final buffer = StringBuffer();
-      _formatItems(grouped[null] ?? [], grouped, buffer, 0);
+      buffer.writeln('=== Rating App Data ===\n');
+      
+      for (var item in ratings) {
+        if (item.isFolder) {
+          buffer.writeln('📁 ${item.name}');
+        } else {
+          buffer.writeln('${item.name} - ${item.rating.toStringAsFixed(2)}⭐');
+          if (item.category != null) {
+            buffer.writeln('  Category: ${item.category}');
+          }
+          if (item.folderIds.isNotEmpty) {
+            final folderNames = ratings
+                .where((r) => r.isFolder && item.folderIds.contains(r.id))
+                .map((r) => r.name)
+                .join(', ');
+            buffer.writeln('  Folders: $folderNames');
+          }
+          if (item.description != null && item.description!.isNotEmpty) {
+            buffer.writeln('  Note: ${item.description}');
+          }
+        }
+        buffer.writeln();
+      }
       
       await Clipboard.setData(ClipboardData(text: buffer.toString()));
       
@@ -177,7 +194,7 @@ class AppDrawer extends StatelessWidget {
               ),
             ),
             accountName: const Text(
-              'Rating App',
+              'My Rates',
               style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
             ),
             accountEmail: const Text('Keep track of what matches your taste'),
@@ -228,16 +245,56 @@ class AppDrawer extends StatelessWidget {
                         ),
                       ),
                     ...folders.map((folder) => ListTile(
-                      contentPadding: const EdgeInsets.only(left: 32, right: 16),
-                      leading: Icon(
-                        Icons.folder_rounded, 
-                        color: folder.color ?? Theme.of(context).colorScheme.primary
-                      ),
-                      title: Text(folder.name),
-                      selected: currentFolderId == folder.id,
-                      onTap: () {
-                        onFolderSelected(folder.id);
-                        Navigator.pop(context);
+                        contentPadding: const EdgeInsets.only(left: 32, right: 16),
+                        leading: Icon(
+                          Icons.folder_rounded, 
+                          color: folder.color ?? Theme.of(context).colorScheme.primary
+                        ),
+                        title: Text(folder.name),
+                        selected: currentFolderId == folder.id,
+                        onTap: () {
+                          onFolderSelected(folder.id);
+                          Navigator.pop(context);
+                        },
+                        onLongPress: () {
+                        showDialog(
+                          context: context,
+                          builder: (context) => AlertDialog(
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            title: const Text('Delete Folder'),
+                            content: Text(
+                              'Are you sure you want to delete "${folder.name}"?\n\nItems in this folder will not be deleted, only removed from the folder.',
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.of(context).pop(),
+                                style: TextButton.styleFrom(
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                                child: const Text('Cancel'),
+                              ),
+                              ElevatedButton(
+                                onPressed: () {
+                                  Navigator.of(context).pop();
+                                  Navigator.of(context).pop(); // Close drawer
+                                  onDeleteFolder(folder.id);
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.red,
+                                  foregroundColor: Colors.white,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                                child: const Text('Delete'),
+                              ),
+                            ],
+                          ),
+                        );
                       },
                     )),
                   ],
@@ -297,7 +354,7 @@ class AppDrawer extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: Text(
-              'v1.0.0',
+              'v1.1.0',
               style: TextStyle(
                 color: Theme.of(context).colorScheme.outline,
                 fontSize: 12,

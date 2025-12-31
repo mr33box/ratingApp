@@ -153,6 +153,8 @@ class _RatingCardState extends State<RatingCard> {
                               fontWeight: FontWeight.bold,
                               color: textColor,
                             ),
+                            maxLines: _isExpanded ? null : 1, // Collapse to 1 line if not expanded
+                            overflow: _isExpanded ? null : TextOverflow.ellipsis,
                           ),
                         ),
                         Icon(

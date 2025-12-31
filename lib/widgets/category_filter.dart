@@ -57,7 +57,10 @@ class CategoryFilter extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return PopupMenuButton<String>(
-      icon: const Icon(Icons.filter_list),
+      icon: Icon(
+        Icons.filter_list,
+        color: selectedCategory != null ? Theme.of(context).colorScheme.primary : null,
+      ),
       tooltip: 'Filter by Category',
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
@@ -86,6 +89,23 @@ class CategoryFilter extends StatelessWidget {
             ),
           ),
         ];
+
+        if (categories.isNotEmpty) {
+          items.add(const PopupMenuDivider());
+        }
+
+        items.add(
+          PopupMenuItem(
+            value: 'CREATE_NEW_CATEGORY_SPECIAL_KEY', 
+            child: Row(
+              children: [
+                Icon(Icons.add, size: 20, color: Theme.of(context).colorScheme.primary),
+                const SizedBox(width: 8),
+                const Text('Create New Category'),
+              ],
+            ),
+          ),
+        );
 
         if (categories.isNotEmpty) {
           items.add(const PopupMenuDivider());

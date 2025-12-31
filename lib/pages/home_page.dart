@@ -9,7 +9,7 @@ import '../widgets/category_filter.dart';
 import '../widgets/app_drawer.dart';
 import '../services/storage_service.dart';
 
-enum SortOrder { none, best, worst }
+enum SortOrder { none, best, worst, newest, oldest }
 
 class HomePage extends StatefulWidget {
   final Function(ThemeMode) onThemeModeChanged;
@@ -23,7 +23,10 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
   List<RatingItem> _ratings = [];
   List<String> _categories = [];
   String? _selectedCategoryFilter;
@@ -32,7 +35,13 @@ class _HomePageState extends State<HomePage> {
   
   // Folder Navigation State
   String? _currentFolderId;
+  final List<String> _folderStack = [];
   
+  // Search State
+  bool _isSearching = false;
+  String _searchQuery = '';
+  final TextEditingController _searchController = TextEditingController();
+
   // Selection Mode State
   bool _isSelectionMode = false;
   final Set<String> _selectedIds = {};
@@ -55,6 +64,25 @@ class _HomePageState extends State<HomePage> {
       setState(() {
         _ratings = ratings;
         _categories = categories;
+      });
+      
+      // Restore current folder
+      final savedFolderId = await StorageService.loadCurrentFolder();
+      if (savedFolderId != null) {
+        // Verify folder still exists
+        final folderExists = ratings.any((r) => r.id == savedFolderId && r.isFolder);
+        if (folderExists) {
+            setState(() {
+                _currentFolderId = savedFolderId;
+                // Reconstruct stack logic if needed, or just set current. 
+                // For simplicity, we just set current, stack might be empty but back should handle it.
+                _folderStack.clear(); 
+                _folderStack.add(savedFolderId);
+            });
+        }
+      }
+      
+      setState(() {
         _isLoading = false;
       });
     } catch (e) {
@@ -72,23 +100,22 @@ class _HomePageState extends State<HomePage> {
     await StorageService.saveCategories(_categories);
   }
 
+
   void _addRating(RatingItem rating) {
+    print('_addRating called with: ${rating.name}, folderIds: ${rating.folderIds}');
     setState(() {
       // Check if this is an update (editing existing item)
       final existingIndex = _ratings.indexWhere((r) => r.id == rating.id);
       if (existingIndex != -1) {
+        print('Updating existing rating at index $existingIndex');
         _ratings[existingIndex] = rating;
       } else {
-        // Add to current folder if creating new
-        if (rating.parentId == null && _currentFolderId != null) {
-           // If we are in a specific folder, ensure new item gets that folder ID
-           // Note: The dialog now handles this logic via parentId param, but this is a safety check
-           // In All Items mode (_currentFolderId == null), parentId defaults to null
-        }
+        print('Adding new rating');
         _ratings.add(rating);
       }
     });
     _saveRatings();
+    print('Rating saved, total ratings: ${_ratings.length}');
   }
 
   void _createFolder(String name) {
@@ -98,7 +125,7 @@ class _HomePageState extends State<HomePage> {
       rating: 0, // Folders don't have ratings usually, or could be avg
       createdAt: DateTime.now(),
       isFolder: true,
-      parentId: _currentFolderId,
+      folderIds: _currentFolderId != null ? [_currentFolderId!] : [],
     );
     _addRating(folder);
   }
@@ -137,27 +164,32 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _navigateToFolder(String folderId) {
-    setState(() {
-      _currentFolderId = folderId;
-      _isSelectionMode = false;
-      _selectedIds.clear();
-    });
+    if (_currentFolderId != folderId) {
+        _folderStack.add(folderId);
+        setState(() {
+          _currentFolderId = folderId;
+          _isSelectionMode = false;
+          _selectedIds.clear();
+        });
+        StorageService.saveCurrentFolder(folderId);
+    }
   }
 
   void _navigateBack() {
-    if (_currentFolderId != null) {
-      // Find current folder to get its parent
-      final currentFolder = _ratings.firstWhere(
-        (r) => r.id == _currentFolderId, 
-        orElse: () => RatingItem(id: '', name: '', rating: 0, createdAt: DateTime.now())
-      );
-      
+    if (_folderStack.isNotEmpty) {
+      _folderStack.removeLast();
       setState(() {
-        _currentFolderId = currentFolder.parentId;
-         _isSelectionMode = false;
-         _selectedIds.clear();
+        _currentFolderId = _folderStack.isNotEmpty ? _folderStack.last : null;
+        _isSelectionMode = false;
+        _selectedIds.clear();
       });
+    } else {
+        // Fallback if stack is empty (shouldn't happen if _currentFolderId logic is correct)
+        setState(() {
+            _currentFolderId = null; 
+        });
     }
+    StorageService.saveCurrentFolder(_currentFolderId);
   }
 
   void _deleteRating(String id) {
@@ -208,16 +240,20 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _moveSelected() {
+    // Get current folderIds of first selected item (for initial state)
+    final firstSelectedItem = _ratings.firstWhere((r) => _selectedIds.contains(r.id));
+    
     showDialog(
       context: context,
       builder: (context) => FolderSelectionDialog(
         allItems: _ratings,
         currentFolderId: _currentFolderId,
-        onFolderSelected: (folderId) {
+        currentFolderIds: firstSelectedItem.folderIds,
+        onFoldersSelected: (selectedFolderIds) {
           setState(() {
             for (var i = 0; i < _ratings.length; i++) {
               if (_selectedIds.contains(_ratings[i].id)) {
-                // Create copy with new parentId
+                // Update item with new folderIds
                 final item = _ratings[i];
                 _ratings[i] = RatingItem(
                   id: item.id,
@@ -229,7 +265,7 @@ class _HomePageState extends State<HomePage> {
                   imagePath: item.imagePath,
                   createdAt: item.createdAt,
                   isFolder: item.isFolder,
-                  parentId: folderId,
+                  folderIds: selectedFolderIds,
                 );
               }
             }
@@ -238,7 +274,11 @@ class _HomePageState extends State<HomePage> {
           });
           _saveRatings();
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Items moved')),
+            SnackBar(
+              content: Text(selectedFolderIds.isEmpty 
+                  ? 'Items removed from all folders' 
+                  : 'Items added to ${selectedFolderIds.length} folder(s)'),
+            ),
           );
         },
       ),
@@ -266,16 +306,64 @@ class _HomePageState extends State<HomePage> {
     _saveRatings();
   }
 
+  void _deleteFolder(String folderId) {
+    setState(() {
+      // Remove the folder itself
+      _ratings.removeWhere((r) => r.id == folderId);
+      
+      // Update all items that reference this folder
+      for (var i = 0; i < _ratings.length; i++) {
+        if (_ratings[i].folderIds.contains(folderId)) {
+          final item = _ratings[i];
+          final updatedFolderIds = List<String>.from(item.folderIds)..remove(folderId);
+          _ratings[i] = RatingItem(
+            id: item.id,
+            name: item.name,
+            category: item.category,
+            rating: item.rating,
+            description: item.description,
+            color: item.color,
+            imagePath: item.imagePath,
+            createdAt: item.createdAt,
+            isFolder: item.isFolder,
+            folderIds: updatedFolderIds,
+          );
+        }
+      }
+      
+      // If currently viewing the deleted folder, navigate back
+      if (_currentFolderId == folderId) {
+        _currentFolderId = null;
+        _folderStack.clear();
+        StorageService.saveCurrentFolder(null);
+      }
+    });
+    _saveRatings();
+  }
+
   List<RatingItem> get _filteredRatings {
     List<RatingItem> filtered = _ratings;
+
+    // Filter by Search Query
+    if (_isSearching && _searchQuery.isNotEmpty) {
+      final query = _searchQuery.toLowerCase();
+      filtered = filtered.where((r) {
+        // Search in Name, Description, or Category
+        return r.name.toLowerCase().contains(query) || 
+               (r.description?.toLowerCase().contains(query) ?? false) ||
+               (r.category?.toLowerCase().contains(query) ?? false);
+      }).toList();
+      // When searching, we show everything (flat list), ignoring folder structure
+      return filtered;
+    }
 
     // Filter by current folder
     if (_currentFolderId == null) {
       // Home Mode: Show ALL ratings that are NOT folders
       filtered = filtered.where((r) => !r.isFolder).toList();
     } else {
-      // Folder Mode: Show only items directly inside this folder
-      filtered = filtered.where((r) => r.parentId == _currentFolderId).toList();
+      // Folder Mode: Show only items that have this folder in their folderIds
+      filtered = filtered.where((r) => r.folderIds.contains(_currentFolderId)).toList();
     }
 
     // Filter by category
@@ -290,6 +378,10 @@ class _HomePageState extends State<HomePage> {
       filtered.sort((a, b) => b.rating.compareTo(a.rating));
     } else if (_sortOrder == SortOrder.worst) {
       filtered.sort((a, b) => a.rating.compareTo(b.rating));
+    } else if (_sortOrder == SortOrder.newest) {
+      filtered.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    } else if (_sortOrder == SortOrder.oldest) {
+      filtered.sort((a, b) => a.createdAt.compareTo(b.createdAt));
     }
 
     return filtered;
@@ -300,7 +392,7 @@ class _HomePageState extends State<HomePage> {
       context: context,
       builder: (context) => AddRatingDialog(
         categories: _categories,
-        parentId: _currentFolderId,
+        currentFolderId: _currentFolderId,
         editingItem: null,
         onAddRating: _addRating,
         onAddCategory: (category) {
@@ -347,8 +439,10 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // Required for AutomaticKeepAliveClientMixin
+    
     // Determine title
-    String title = 'Rating App';
+    String title = 'My Rates';
     if (_currentFolderId != null) {
       final folder = _ratings.firstWhere(
         (r) => r.id == _currentFolderId,
@@ -378,49 +472,85 @@ class _HomePageState extends State<HomePage> {
         folders: _ratings.where((r) => r.isFolder).toList(),
         currentFolderId: _currentFolderId,
         onFolderSelected: (folderId) {
-             _navigateToFolder(folderId ?? 'root_reset_null'); // Handle null passing properly
              if (folderId == null) {
                 // If Home is selected, clear everything
+                _folderStack.clear();
                 setState(() {
                   _currentFolderId = null;
                   _isSelectionMode = false;
                   _selectedIds.clear();
                 });
+                StorageService.saveCurrentFolder(null);
              } else {
-               _navigateToFolder(folderId);
+               // Reset stack and start fresh from clicked folder? Or allow deep nav?
+               // Usuall drawer navigation resets the stack to that point.
+               _folderStack.clear();
+               _folderStack.add(folderId);
+               setState(() {
+                 _currentFolderId = folderId;
+                 _isSelectionMode = false;
+                 _selectedIds.clear();
+               });
+               StorageService.saveCurrentFolder(folderId);
              }
         },
         onCreateFolder: _showCreateFolderDialog,
+        onDeleteFolder: _deleteFolder,
         onThemeModeChanged: widget.onThemeModeChanged,
       ),
       appBar: AppBar(
-        leading: _isSelectionMode
+        leading: _isSearching
             ? IconButton(
-                icon: const Icon(Icons.close),
+                icon: const Icon(Icons.arrow_back),
                 onPressed: () {
                   setState(() {
-                    _isSelectionMode = false;
-                    _selectedIds.clear();
+                    _isSearching = false;
+                    _searchQuery = '';
+                    _searchController.clear();
                   });
                 },
               )
-            : (_currentFolderId != null 
-                // In sub-folder: Show back button
+            : _isSelectionMode
                 ? IconButton(
-                    icon: const Icon(Icons.arrow_back), 
-                    onPressed: _navigateBack
+                    icon: const Icon(Icons.close),
+                    onPressed: () {
+                      setState(() {
+                        _isSelectionMode = false;
+                        _selectedIds.clear();
+                      });
+                    },
                   )
-                // At root: Show hamburger (Flutter does this automatically if leading is null, but we explicitly control it)
-                : Builder(
-                    builder: (context) => IconButton(
-                      icon: const Icon(Icons.menu),
-                      onPressed: () => Scaffold.of(context).openDrawer(),
+                : (_currentFolderId != null 
+                    ? IconButton(
+                        icon: const Icon(Icons.arrow_back), 
+                        onPressed: _navigateBack
+                      )
+                    : Builder(
+                        builder: (context) => IconButton(
+                          icon: const Icon(Icons.menu),
+                          onPressed: () => Scaffold.of(context).openDrawer(),
+                        ),
+                      )
                     ),
-                  )
+        title: _isSearching
+            ? TextField(
+                controller: _searchController,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  hintText: 'Search...',
+                  border: InputBorder.none,
+                  hintStyle: TextStyle(color: Colors.white70),
                 ),
-        title: _isSelectionMode 
-            ? Text('${_selectedIds.length} Selected') 
-            : Text(title),
+                style: const TextStyle(color: Colors.white),
+                onChanged: (value) {
+                  setState(() {
+                    _searchQuery = value;
+                  });
+                },
+              )
+            : (_isSelectionMode 
+                ? Text('${_selectedIds.length} Selected') 
+                : Text(title)),
         actions: _isSelectionMode
             ? [
                 IconButton(
@@ -436,7 +566,19 @@ class _HomePageState extends State<HomePage> {
                 ),
               ]
             : [
+          // Search Button (only show if not searching)
+          if (!_isSearching)
+            IconButton(
+              icon: const Icon(Icons.search),
+              onPressed: () {
+                setState(() {
+                  _isSearching = true;
+                });
+              },
+            ),
+          
           // Ranking filter
+          if (!_isSearching)
           PopupMenuButton<SortOrder>(
             tooltip: 'Sort by Rating',
             onSelected: (value) {
@@ -462,7 +604,7 @@ class _HomePageState extends State<HomePage> {
                   children: [
                     Icon(Icons.arrow_upward, size: 20, color: Colors.green),
                     SizedBox(width: 8),
-                    Text('Best First'),
+                    Text('Best Rating First'),
                   ],
                 ),
               ),
@@ -472,7 +614,28 @@ class _HomePageState extends State<HomePage> {
                   children: [
                     Icon(Icons.arrow_downward, size: 20, color: Colors.red),
                     SizedBox(width: 8),
-                    Text('Worst First'),
+                    Text('Worst Rating First'),
+                  ],
+                ),
+              ),
+              const PopupMenuDivider(),
+              const PopupMenuItem(
+                value: SortOrder.newest,
+                child: Row(
+                  children: [
+                    Icon(Icons.access_time, size: 20, color: Colors.blue),
+                    SizedBox(width: 8),
+                    Text('Newest First'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: SortOrder.oldest,
+                child: Row(
+                  children: [
+                    Icon(Icons.history, size: 20, color: Colors.grey),
+                    SizedBox(width: 8),
+                    Text('Oldest First'),
                   ],
                 ),
               ),
@@ -482,29 +645,82 @@ class _HomePageState extends State<HomePage> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.sort),
-                  if (_sortOrder != SortOrder.none)
-                    Padding(
-                      padding: const EdgeInsets.only(left: 4.0),
-                      child: Icon(
-                        _sortOrder == SortOrder.best
-                            ? Icons.arrow_upward
-                            : Icons.arrow_downward,
-                        size: 16,
-                      ),
-                    ),
+                   Icon(
+                     _sortOrder == SortOrder.best || _sortOrder == SortOrder.worst ? Icons.star : Icons.sort,
+                     color: _sortOrder != SortOrder.none ? Theme.of(context).colorScheme.primary : null,
+                   ),
+                   if (_sortOrder != SortOrder.none)
+                     Padding(
+                       padding: const EdgeInsets.only(left: 4.0),
+                       child: Icon(
+                         _sortOrder == SortOrder.best
+                             ? Icons.arrow_upward
+                             : _sortOrder == SortOrder.worst
+                                 ? Icons.arrow_downward
+                                 : _sortOrder == SortOrder.newest || _sortOrder == SortOrder.oldest 
+                                    ? Icons.access_time 
+                                    : Icons.check,
+                         size: 14,
+                         color: Theme.of(context).colorScheme.primary,
+                       ),
+                     ),
                 ],
               ),
             ),
           ),
           // Category filter
+          if (!_isSearching)
           CategoryFilter(
             categories: _categories,
             selectedCategory: _selectedCategoryFilter,
             onCategorySelected: (category) {
-              setState(() {
-                _selectedCategoryFilter = category;
-              });
+              if (category == 'CREATE_NEW_CATEGORY_SPECIAL_KEY') {
+                   // Show dialog to create new category
+                   final controller = TextEditingController();
+                   showDialog(
+                     context: context,
+                     builder: (context) => AlertDialog(
+                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                       title: const Text('Create Category'),
+                       content: TextField(
+                         controller: controller,
+                         autofocus: true,
+                         decoration: const InputDecoration(
+                           labelText: 'Category Name',
+                           hintText: 'e.g., Movies, Books',
+                         ),
+                       ),
+                       actions: [
+                         TextButton(
+                           onPressed: () => Navigator.pop(context),
+                           child: const Text('Cancel'),
+                         ),
+                         ElevatedButton(
+                           onPressed: () {
+                             if (controller.text.trim().isNotEmpty) {
+                               _addCategory(controller.text.trim());
+                               setState(() {
+                                 _selectedCategoryFilter = controller.text.trim();
+                               });
+                               Navigator.pop(context);
+                               ScaffoldMessenger.of(context).showSnackBar(
+                                 SnackBar(
+                                   content: Text('Category "${controller.text.trim()}" created!'),
+                                   backgroundColor: Colors.green,
+                                 ),
+                               );
+                             }
+                           },
+                           child: const Text('Create'),
+                         ),
+                       ],
+                     ),
+                   );
+               } else {
+                  setState(() {
+                    _selectedCategoryFilter = category;
+                  });
+               }
             },
             onDeleteCategory: _deleteCategory,
           ),
@@ -515,8 +731,14 @@ class _HomePageState extends State<HomePage> {
               child: CircularProgressIndicator(),
             )
           : _filteredRatings.isEmpty
-              ? const EmptyState()
-              : ListView.builder(
+              ? (_isSearching 
+                  ? Center(child: Text('No results for "$_searchQuery"', style: const TextStyle(fontSize: 16, color: Colors.grey))) 
+                  : const EmptyState())
+              : Scrollbar(
+                  thumbVisibility: true,
+                  thickness: 6,
+                  radius: const Radius.circular(3),
+                  child: ListView.builder(
                   padding: const EdgeInsets.symmetric(vertical: 8),
                   itemCount: _filteredRatings.length,
                   itemBuilder: (context, index) {
@@ -525,7 +747,7 @@ class _HomePageState extends State<HomePage> {
                     if (item.isFolder) {
                         return FolderCard(
                           folder: item,
-                          itemCount: _ratings.where((r) => r.parentId == item.id).length,
+                          itemCount: _ratings.where((r) => r.folderIds.contains(item.id)).length,
                           isSelected: _selectedIds.contains(item.id),
                           onTap: () {
                               if (_isSelectionMode) {
@@ -538,13 +760,17 @@ class _HomePageState extends State<HomePage> {
                         );
                     }
                     
+                    // Logic to find folder names for this item
                     String? parentFolderName;
-                    if (item.parentId != null) {
-                      try {
-                        parentFolderName = _ratings
-                            .firstWhere((r) => r.id == item.parentId)
-                            .name;
-                      } catch (_) {}
+                    if (item.folderIds.isNotEmpty) {
+                       // Find names of all folders this item belongs to
+                       final folderNames = _ratings
+                           .where((r) => r.isFolder && item.folderIds.contains(r.id))
+                           .map((r) => r.name)
+                           .join(', ');
+                       if (folderNames.isNotEmpty) {
+                           parentFolderName = folderNames;
+                       }
                     }
                     
                     return RatingCard(
@@ -560,11 +786,13 @@ class _HomePageState extends State<HomePage> {
                     );
                   },
                 ),
+              ),
       floatingActionButton: _isSelectionMode ? null : FloatingActionButton(
         onPressed: _showAddRatingDialog,
         tooltip: 'Add Rating',
         child: const Icon(Icons.add),
       ),
-    ));
+    ),
+    );
   }
 }

@@ -66,5 +66,29 @@ class StorageService {
       print('Error clearing data: $e');
     }
   }
+  // Save current folder ID
+  static Future<void> saveCurrentFolder(String? folderId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (folderId == null) {
+        await prefs.remove('current_folder');
+      } else {
+        await prefs.setString('current_folder', folderId);
+      }
+    } catch (e) {
+      print('Error saving current folder: $e');
+    }
+  }
+
+  // Load current folder ID
+  static Future<String?> loadCurrentFolder() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString('current_folder');
+    } catch (e) {
+      print('Error loading current folder: $e');
+      return null;
+    }
+  }
 }
 
