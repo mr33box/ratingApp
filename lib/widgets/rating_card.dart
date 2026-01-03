@@ -70,7 +70,9 @@ class _RatingCardState extends State<RatingCard> {
           borderRadius: BorderRadius.circular(16),
           color: widget.rating.color != null 
             ? widget.rating.color!.withOpacity(0.9)
-            : Theme.of(context).cardColor,
+            : (theme.brightness == Brightness.light 
+                ? Colors.white 
+                : theme.colorScheme.surfaceContainerHighest),
           boxShadow: [
              if (isTopRating)
                BoxShadow(
