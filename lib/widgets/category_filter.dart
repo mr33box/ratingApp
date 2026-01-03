@@ -21,9 +21,9 @@ class CategoryFilter extends StatelessWidget {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
         ),
-        title: const Text('Delete Category'),
+        title: const Text('Delete Type'),
         content: Text(
-          'Are you sure you want to delete "$category"?\n\nAll ratings in this category will also be deleted.',
+          'Are you sure you want to delete "$category"?\n\nAll ratings in this type will also be deleted.',
         ),
         actions: [
           TextButton(
@@ -61,7 +61,7 @@ class CategoryFilter extends StatelessWidget {
         Icons.filter_list,
         color: selectedCategory != null ? Theme.of(context).colorScheme.primary : null,
       ),
-      tooltip: 'Filter by Category',
+      tooltip: 'Filter by Type',
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
       ),
@@ -81,10 +81,20 @@ class CategoryFilter extends StatelessWidget {
                 Icon(
                   Icons.clear_all,
                   size: 20,
-                  color: Theme.of(context).colorScheme.primary,
+                  color: selectedCategory == null ? Theme.of(context).colorScheme.primary : null,
                 ),
                 const SizedBox(width: 8),
-                const Text('All Categories'),
+                Text(
+                  'All Types',
+                  style: TextStyle(
+                    color: selectedCategory == null ? Theme.of(context).colorScheme.primary : null,
+                    fontWeight: selectedCategory == null ? FontWeight.bold : null,
+                  ),
+                ),
+                if (selectedCategory == null) ...[
+                  const Spacer(),
+                  Icon(Icons.check, size: 18, color: Theme.of(context).colorScheme.primary),
+                ],
               ],
             ),
           ),
@@ -101,7 +111,7 @@ class CategoryFilter extends StatelessWidget {
               children: [
                 Icon(Icons.add, size: 20, color: Theme.of(context).colorScheme.primary),
                 const SizedBox(width: 8),
-                const Text('Create New Category'),
+                const Text('Create New Type'),
               ],
             ),
           ),
@@ -112,6 +122,7 @@ class CategoryFilter extends StatelessWidget {
         }
 
         for (final category in categories) {
+          final isSelected = selectedCategory == category;
           items.add(
             PopupMenuItem(
               value: category,
@@ -125,17 +136,21 @@ class CategoryFilter extends StatelessWidget {
                     Icon(
                       Icons.category,
                       size: 20,
-                      color: selectedCategory == category
-                          ? Theme.of(context).colorScheme.primary
-                          : null,
+                      color: isSelected ? Theme.of(context).colorScheme.primary : null,
                     ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         category,
                         overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: isSelected ? Theme.of(context).colorScheme.primary : null,
+                          fontWeight: isSelected ? FontWeight.bold : null,
+                        ),
                       ),
                     ),
+                    if (isSelected) 
+                      Icon(Icons.check, size: 18, color: Theme.of(context).colorScheme.primary),
                   ],
                 ),
               ),

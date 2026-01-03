@@ -8,6 +8,7 @@ import '../widgets/empty_state.dart';
 import '../widgets/category_filter.dart';
 import '../widgets/app_drawer.dart';
 import '../services/storage_service.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 
 enum SortOrder { none, best, worst, newest, oldest }
 
@@ -399,7 +400,7 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
           _addCategory(category);
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Category "$category" added!'),
+              content: Text('Type "$category" added!'),
               backgroundColor: Colors.green,
               behavior: SnackBarBehavior.floating,
               duration: const Duration(seconds: 2),
@@ -423,7 +424,7 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
           _addCategory(category);
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Category "$category" added!'),
+              content: Text('Type "$category" added!'),
               backgroundColor: Colors.green,
               behavior: SnackBarBehavior.floating,
               duration: const Duration(seconds: 2),
@@ -536,12 +537,16 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
             ? TextField(
                 controller: _searchController,
                 autofocus: true,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   hintText: 'Search...',
                   border: InputBorder.none,
-                  hintStyle: TextStyle(color: Colors.white70),
+                  hintStyle: TextStyle(
+                      color: Theme.of(context).brightness == Brightness.light ? Colors.grey : Colors.white70
+                  ),
                 ),
-                style: const TextStyle(color: Colors.white),
+                style: TextStyle(
+                    color: Theme.of(context).brightness == Brightness.light ? Colors.black : Colors.white
+                ),
                 onChanged: (value) {
                   setState(() {
                     _searchQuery = value;
@@ -586,60 +591,82 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
                 _sortOrder = value;
               });
             },
-            itemBuilder: (context) => [
-              const PopupMenuItem(
+            itemBuilder: (context) {
+              Color? getIconColor(SortOrder itemOrder, Color defaultColor) {
+                return _sortOrder == itemOrder ? defaultColor : null;
+              }
+              
+              TextStyle? getTextStyle(SortOrder itemOrder) {
+                return _sortOrder == itemOrder 
+                    ? TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold) 
+                    : null;
+              }
+
+              return [
+              PopupMenuItem(
                 value: SortOrder.none,
                 child: Row(
                   children: [
-                    Icon(Icons.clear_all, size: 20),
-                    SizedBox(width: 8),
-                    Text('No Sort'),
+                    Icon(Icons.clear_all, size: 20, color: _sortOrder == SortOrder.none ? Theme.of(context).colorScheme.primary : null),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text('No Sort', style: getTextStyle(SortOrder.none))),
+                    if (_sortOrder == SortOrder.none)
+                      Icon(Icons.check, size: 18, color: Theme.of(context).colorScheme.primary),
                   ],
                 ),
               ),
               const PopupMenuDivider(),
-              const PopupMenuItem(
+              PopupMenuItem(
                 value: SortOrder.best,
                 child: Row(
                   children: [
-                    Icon(Icons.arrow_upward, size: 20, color: Colors.green),
-                    SizedBox(width: 8),
-                    Text('Best Rating First'),
+                    Icon(Icons.arrow_upward, size: 20, color: getIconColor(SortOrder.best, Colors.green)),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text('Best Rating First', style: getTextStyle(SortOrder.best))),
+                    if (_sortOrder == SortOrder.best)
+                      Icon(Icons.check, size: 18, color: Theme.of(context).colorScheme.primary),
                   ],
                 ),
               ),
-              const PopupMenuItem(
+              PopupMenuItem(
                 value: SortOrder.worst,
                 child: Row(
                   children: [
-                    Icon(Icons.arrow_downward, size: 20, color: Colors.red),
-                    SizedBox(width: 8),
-                    Text('Worst Rating First'),
+                    Icon(Icons.arrow_downward, size: 20, color: getIconColor(SortOrder.worst, Colors.red)),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text('Worst Rating First', style: getTextStyle(SortOrder.worst))),
+                    if (_sortOrder == SortOrder.worst)
+                      Icon(Icons.check, size: 18, color: Theme.of(context).colorScheme.primary),
                   ],
                 ),
               ),
               const PopupMenuDivider(),
-              const PopupMenuItem(
+              PopupMenuItem(
                 value: SortOrder.newest,
                 child: Row(
                   children: [
-                    Icon(Icons.access_time, size: 20, color: Colors.blue),
-                    SizedBox(width: 8),
-                    Text('Newest First'),
+                    Icon(Icons.access_time, size: 20, color: getIconColor(SortOrder.newest, Colors.blue)),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text('Newest First', style: getTextStyle(SortOrder.newest))),
+                    if (_sortOrder == SortOrder.newest)
+                      Icon(Icons.check, size: 18, color: Theme.of(context).colorScheme.primary),
                   ],
                 ),
               ),
-              const PopupMenuItem(
+              PopupMenuItem(
                 value: SortOrder.oldest,
                 child: Row(
                   children: [
-                    Icon(Icons.history, size: 20, color: Colors.grey),
-                    SizedBox(width: 8),
-                    Text('Oldest First'),
+                    Icon(Icons.history, size: 20, color: getIconColor(SortOrder.oldest, Colors.grey)),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text('Oldest First', style: getTextStyle(SortOrder.oldest))),
+                    if (_sortOrder == SortOrder.oldest)
+                      Icon(Icons.check, size: 18, color: Theme.of(context).colorScheme.primary),
                   ],
                 ),
               ),
-            ],
+            ];
+            },
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8.0),
               child: Row(
@@ -669,8 +696,23 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
             ),
           ),
           // Category filter
-          if (!_isSearching)
-          CategoryFilter(
+          if (!_isSearching) ...[
+            if (_selectedCategoryFilter != null)
+               Padding(
+                 padding: const EdgeInsets.only(right: 8.0),
+                 child: Align(
+                   alignment: Alignment.center,
+                   child: Text(
+                     _selectedCategoryFilter!,
+                     style: TextStyle(
+                       color: Theme.of(context).colorScheme.primary,
+                       fontWeight: FontWeight.bold,
+                       fontSize: 16,
+                     ),
+                   ),
+                 ),
+               ),
+            CategoryFilter(
             categories: _categories,
             selectedCategory: _selectedCategoryFilter,
             onCategorySelected: (category) {
@@ -681,12 +723,12 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
                      context: context,
                      builder: (context) => AlertDialog(
                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                       title: const Text('Create Category'),
+                       title: const Text('Create Type'),
                        content: TextField(
                          controller: controller,
                          autofocus: true,
                          decoration: const InputDecoration(
-                           labelText: 'Category Name',
+                           labelText: 'Type Name',
                            hintText: 'e.g., Movies, Books',
                          ),
                        ),
@@ -705,7 +747,7 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
                                Navigator.pop(context);
                                ScaffoldMessenger.of(context).showSnackBar(
                                  SnackBar(
-                                   content: Text('Category "${controller.text.trim()}" created!'),
+                                   content: Text('Type "${controller.text.trim()}" created!'),
                                    backgroundColor: Colors.green,
                                  ),
                                );
@@ -724,6 +766,7 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
             },
             onDeleteCategory: _deleteCategory,
           ),
+          ],
         ],
       ),
       body: _isLoading
@@ -735,11 +778,11 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
                   ? Center(child: Text('No results for "$_searchQuery"', style: const TextStyle(fontSize: 16, color: Colors.grey))) 
                   : const EmptyState())
               : Scrollbar(
-                  thumbVisibility: true,
+                  thumbVisibility: false,
                   thickness: 6,
                   radius: const Radius.circular(3),
                   child: ListView.builder(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  padding: const EdgeInsets.only(top: 8, bottom: 80),
                   itemCount: _filteredRatings.length,
                   itemBuilder: (context, index) {
                     final item = _filteredRatings[index];
@@ -757,7 +800,7 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
                               }
                           },
                           onLongPress: () => _toggleSelection(item.id),
-                        );
+                        ).animate(delay: (50 * index).ms).fadeIn(duration: 300.ms).slideY(begin: 0.1, end: 0);
                     }
                     
                     // Logic to find folder names for this item
@@ -775,6 +818,7 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
                     
                     return RatingCard(
                       rating: item,
+                      rank: (_sortOrder == SortOrder.best || _sortOrder == SortOrder.worst) ? index + 1 : null,
                       folderName: parentFolderName,
                       // Hide delete button in card, use long press batch delete
                       onEdit: () => _showEditRatingDialog(item),
@@ -783,7 +827,7 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
                           ? () => _toggleSelection(item.id) 
                           : null, // Pass null to let RatingCard handle expansion
                       onLongPress: () => _toggleSelection(item.id),
-                    );
+                    ).animate(delay: (50 * index).ms).fadeIn(duration: 300.ms).slideY(begin: 0.1, end: 0);
                   },
                 ),
               ),

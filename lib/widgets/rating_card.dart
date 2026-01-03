@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import '../models/rating_item.dart';
 import '../utils/rating_utils.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 
 class RatingCard extends StatefulWidget {
   final RatingItem rating;
@@ -11,6 +12,7 @@ class RatingCard extends StatefulWidget {
   final VoidCallback? onLongPress;
   final bool isSelected;
   final String? folderName;
+  final int? rank;
 
   const RatingCard({
     super.key,
@@ -21,6 +23,7 @@ class RatingCard extends StatefulWidget {
     this.onLongPress,
     this.isSelected = false,
     this.folderName,
+    this.rank,
   });
 
   @override
@@ -47,6 +50,9 @@ class _RatingCardState extends State<RatingCard> {
     final ratingTextColor = widget.rating.color != null ? Colors.white : ratingColor;
     final ratingIconColor = widget.rating.color != null ? Colors.white : ratingColor;
 
+    // Fire/Glow effect for 10/10
+    final isTopRating = widget.rating.rating >= 10.0;
+
     return GestureDetector(
       onTap: widget.onTap ?? () {
         setState(() {
@@ -54,21 +60,41 @@ class _RatingCardState extends State<RatingCard> {
         });
       },
       onLongPress: widget.onLongPress,
-      child: Card(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 300),
         margin: const EdgeInsets.symmetric(
           horizontal: 16,
           vertical: 8,
         ),
-        elevation: widget.isSelected ? 4 : 2,
-        shape: RoundedRectangleBorder(
+        decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
-          side: widget.isSelected 
-            ? BorderSide(color: colorScheme.primary, width: 3)
-            : BorderSide.none,
-        ),
-        color: widget.rating.color != null 
+          color: widget.rating.color != null 
             ? widget.rating.color!.withOpacity(0.9)
+            : Theme.of(context).cardColor,
+          boxShadow: [
+             if (isTopRating)
+               BoxShadow(
+                 color: Colors.orange.withOpacity(0.3),
+                 blurRadius: 12,
+                 spreadRadius: 2,
+               )
+             else if (widget.isSelected)
+               BoxShadow(
+                 color: colorScheme.primary.withOpacity(0.3),
+                 blurRadius: 8,
+                 spreadRadius: 1,
+               )
+             else
+               BoxShadow(
+                 color: Colors.black.withOpacity(0.1),
+                 blurRadius: 4,
+                 offset: const Offset(0, 2),
+               ),
+          ],
+           border: widget.isSelected 
+            ? Border.all(color: colorScheme.primary, width: 3)
             : null,
+        ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(16),
           child: Stack(
@@ -137,7 +163,11 @@ class _RatingCardState extends State<RatingCard> {
                   ),
                 ),
               // Content
-              Padding(
+              AnimatedSize(
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeInOut,
+                alignment: Alignment.topCenter,
+                child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -146,15 +176,38 @@ class _RatingCardState extends State<RatingCard> {
                     Row(
                       children: [
                         Expanded(
-                          child: Text(
-                            widget.rating.name,
-                            style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                              color: textColor,
-                            ),
-                            maxLines: _isExpanded ? null : 1, // Collapse to 1 line if not expanded
-                            overflow: _isExpanded ? null : TextOverflow.ellipsis,
+                          child: Row(
+                            children: [
+                              if (widget.rank != null)
+                                Container(
+                                  margin: const EdgeInsets.only(right: 8),
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: textColor.withOpacity(0.15),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    '#${widget.rank}',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: textColor.withOpacity(0.7),
+                                    ),
+                                  ),
+                                ),
+                              Expanded(
+                                child: Text(
+                                  widget.rating.name,
+                                  style: TextStyle(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold,
+                                    color: textColor,
+                                  ),
+                                  maxLines: _isExpanded ? null : 1,
+                                  overflow: _isExpanded ? null : TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                         Icon(
@@ -178,12 +231,41 @@ class _RatingCardState extends State<RatingCard> {
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
+                        if (isTopRating)
+                          Animate(
+                            onPlay: (controller) => controller.repeat(),
+                            effects: const [
+                               ShimmerEffect(duration: Duration(milliseconds: 1500), color: Colors.orangeAccent),
+                               ScaleEffect(begin: Offset(1.0, 1.0), end: Offset(1.1, 1.1), duration: Duration(milliseconds: 1000), curve: Curves.easeInOut, delay: Duration(milliseconds: 0)),
+                            ],
+                            child: Icon(Icons.local_fire_department, color: Colors.orangeAccent, size: 28),
+                          )
+                        else
                         Icon(
                           Icons.star,
                           color: ratingIconColor,
                           size: 24,
                         ),
                         const SizedBox(width: 6),
+                        if (isTopRating)
+                           Animate(
+                             onPlay: (controller) => controller.repeat(reverse: true),
+                             effects: const [
+                               ScaleEffect(begin: Offset(1.0, 1.0), end: Offset(1.05, 1.05), duration: Duration(milliseconds: 1500)),
+                             ],
+                             child: Text(
+                                widget.rating.rating.toStringAsFixed(2),
+                                style: TextStyle(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.orangeAccent,
+                                  shadows: [
+                                    Shadow(color: Colors.redAccent.withOpacity(0.5), blurRadius: 10),
+                                  ]
+                                ),
+                              ),
+                           )
+                        else
                         Text(
                           widget.rating.rating.toStringAsFixed(2),
                           style: TextStyle(
@@ -294,6 +376,7 @@ class _RatingCardState extends State<RatingCard> {
                   ],
                 ),
               ),
+            ),
             ],
           ),
         ),

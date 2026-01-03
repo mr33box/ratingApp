@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import '../models/rating_item.dart';
 import '../utils/rating_utils.dart';
 
@@ -192,8 +193,8 @@ class _AddRatingDialogState extends State<AddRatingDialog> {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
         ),
-        title: const Text('Delete Category'),
-        content: Text('Are you sure you want to delete "$category"?\n\nAll ratings in this category will also be deleted.'),
+        title: const Text('Delete Type'),
+        content: Text('Are you sure you want to delete "$category"?\n\nAll ratings in this type will also be deleted.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
@@ -564,7 +565,7 @@ class _AddRatingDialogState extends State<AddRatingDialog> {
                     DropdownButtonFormField<String>(
                       value: _selectedCategory,
                       decoration: InputDecoration(
-                        labelText: 'Category (Optional)',
+                        labelText: 'Type (Optional)',
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                           borderSide: BorderSide.none,
@@ -584,7 +585,7 @@ class _AddRatingDialogState extends State<AddRatingDialog> {
                       items: [
                         const DropdownMenuItem<String>(
                           value: null,
-                          child: Text('No Category'),
+                          child: Text('No Type'),
                         ),
                         ...widget.categories.map((category) =>
                             DropdownMenuItem<String>(
@@ -603,7 +604,7 @@ class _AddRatingDialogState extends State<AddRatingDialog> {
                             children: [
                               Icon(Icons.add_circle_outline, size: 20),
                               SizedBox(width: 8),
-                              Text('Create New Category'),
+                              Text('Create New Type'),
                             ],
                           ),
                         ),
@@ -618,7 +619,7 @@ class _AddRatingDialogState extends State<AddRatingDialog> {
                             controller: _newCategoryController,
                             maxLength: 30,
                             decoration: InputDecoration(
-                              labelText: 'Category Name',
+                              labelText: 'Type Name',
                               counterText: "",
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
@@ -901,7 +902,7 @@ class _AddRatingDialogState extends State<AddRatingDialog> {
             ),
           ),
         ),
-      ),
+      ).animate(delay: 100.ms).scale(duration: 400.ms, curve: Curves.easeOutBack).fadeIn(duration: 300.ms),
     );
   }
 }
